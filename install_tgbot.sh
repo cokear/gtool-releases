@@ -4,10 +4,12 @@ re="\033[0m"
 red="\e[1;91m"
 green="\e[1;32m"
 yellow="\e[1;33m"
+purple="\e[1;35m"
 
 print_green() { echo -e "${green}$1${re}"; }
 print_yellow() { echo -e "${yellow}$1${re}"; }
 print_red() { echo -e "${red}$1${re}"; }
+print_purple() { echo -e "${purple}$1${re}"; }
 
 print_yellow "\n=== TGBOT-Python 专属一键反代部署脚本 (适用于 CT8/Serv00) ===\n"
 
@@ -18,9 +20,7 @@ if [[ -z "$DOMAIN" ]]; then
     exit 1
 fi
 
-# 你的专属项目直链
 ZIP_URL="https://github.com/cokear/gtool-releases/raw/refs/heads/main/py.zip"
-
 WORKDIR="${HOME}/domains/${DOMAIN}/public_python"
 mkdir -p "$WORKDIR"
 
@@ -47,12 +47,11 @@ find . -mindepth 1 -maxdepth 1 ! -name 'data' ! -name 'venv' -exec rm -rf {} +
 
 curl -sLo bot.zip "$ZIP_URL"
 unzip -oq bot.zip
-# 兼容解压（不管你打包时带不带外层文件夹，都能正确提取）
 mv */* ./ 2>/dev/null
 mv */.* ./ 2>/dev/null
 rm -rf bot.zip
 
-print_yellow "\n[3/5] 正在创建 Python 虚拟环境并安装依赖 (这可能需要 2-3 分钟)..."
+print_yellow "\n[3/5] 正在创建 Python 虚拟环境并安装依赖..."
 PYTHON_BIN=$(command -v python3.11 || command -v python3.10 || command -v python3)
 if [ ! -d "venv" ]; then
     $PYTHON_BIN -m venv venv
@@ -61,17 +60,27 @@ source venv/bin/activate
 pip install -q --upgrade pip
 pip install -q -r requirements.txt
 
-print_yellow "\n[4/5] 正在设置开机自启守护 (Crontab)..."
-pkill -f "$WORKDIR/venv/bin/python" >/dev/null 2>&1
-
-CRON_CMD="@reboot cd $WORKDIR && PORT=$PORT nohup ./venv/bin/python main.py >> bot.log 2>&1 &"
-(crontab -l 2>/dev/null | grep -v "$DOMAIN"; echo "$CRON_CMD") | crontab -
+print_yellow "\n[4/5] 正在配置 PM2 进程守护神..."
+if ! command -v pm2 &>/dev/null; then
+    npm install -g pm2 >/dev/null 2>&1
+    export PATH=~/.npm-global/bin:$PATH
+fi
+pm2 delete "tgbot-$DOMAIN" >/dev/null 2>&1
 
 print_yellow "\n[5/5] 正在唤醒机器人守护进程..."
-PORT=$PORT nohup ./venv/bin/python main.py >> bot.log 2>&1 &
+PORT=$PORT pm2 start main.py --interpreter ./venv/bin/python --name "tgbot-$DOMAIN" >/dev/null 2>&1
+pm2 save >/dev/null 2>&1
 
 print_green "\n============================================="
 print_green "🎉 恭喜！TGBOT-Python 已成功部署并在后台隐式运行！"
 print_green "============================================="
-print_green "📌 机器人管理面板：http://${DOMAIN}"
-print_green "💡 提示：如果使用了 Cloudflare 自定义域名，别忘了去 Cloudflare 加 A 记录，并开启【灵活(Flexible)】模式！"
+
+# 自动探测并显示 IP 提示
+if ! echo "$DOMAIN" | grep -q '\(ct8\.pl\|serv00\.net\|useruno\.com\)'; then
+    ip_address=$(devil vhost list | awk '$2 ~ /web/ {print $1}' | head -n 1)
+    print_purple "\n⚠️ 发现你使用了自定义域名！最后两步极其重要："
+    print_purple "1. 去 Cloudflare 添加 A 记录，指向: ${yellow}${ip_address}${purple}"
+    print_purple "2. 务必将 Cloudflare 的 SSL/TLS 加密模式改为 ${yellow}灵活 (Flexible)${purple}"
+fi
+
+print_green "\n📌 机器人管理面板：http://${DOMAIN}"

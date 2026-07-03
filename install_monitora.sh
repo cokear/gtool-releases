@@ -20,8 +20,8 @@ if [[ -z "$DOMAIN" ]]; then
     exit 1
 fi
 
-# 你的专属编译成品下载链接
-ZIP_URL="https://github.com/debbide/monitora/releases/download/v1.0.1/monitora-release.zip"
+# 使用 latest/download 动态路由，永远拉取最新版本！绝对不会有缓存！
+ZIP_URL="https://github.com/debbide/monitora/releases/latest/download/monitora-release.zip"
 WORKDIR="${HOME}/domains/${DOMAIN}/public_nodejs"
 
 print_yellow "\n[1/5] 正在向系统申请原生 Node.js VIP 托管环境 (无需端口)..."
@@ -32,10 +32,11 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-print_yellow "\n[2/5] 正在下载 GitHub 自动编译好的成品包..."
+print_yellow "\n[2/5] 正在下载 GitHub 最新编译好的成品包..."
 rm -rf "$WORKDIR" 2>/dev/null
 mkdir -p "$WORKDIR"
 cd "$WORKDIR" || exit 1
+# 使用 -L 自动跟随 latest 的重定向
 curl -sLo release.zip "$ZIP_URL"
 unzip -q release.zip && rm release.zip
 

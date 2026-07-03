@@ -11,10 +11,10 @@ print_yellow() { echo -e "${yellow}$1${re}"; }
 print_red() { echo -e "${red}$1${re}"; }
 print_purple() { echo -e "${purple}$1${re}"; }
 
-print_yellow "\n=== Monitora 专属一键原生部署脚本 (适用于 CT8/Serv00) ===\n"
+print_yellow "\n=== Monitora 专属一键原生部署脚本 ===\n"
 
-# 1. 交互式填写信息
-read -p "请输入你要绑定的域名 (如 m.bbe.pp.ua 或自定义域名): " DOMAIN
+# 1. 交互式填写信息，绝不写死
+read -p "请输入你要绑定的域名 (如 monitor.yourdomain.com): " DOMAIN
 if [[ -z "$DOMAIN" ]]; then
     print_red "域名不能为空！"
     exit 1
@@ -40,32 +40,27 @@ curl -sLo release.zip "$ZIP_URL"
 unzip -q release.zip && rm release.zip
 
 print_yellow "\n[3/5] 正在安装生产环境极轻量依赖..."
-# 只安装运行时需要的包，跳过 devDependencies，完美绕过内存限制
 npm ci --production --loglevel error
 
 print_yellow "\n[4/5] 正在配置系统级启动入口..."
-# 桥接 Passenger 与 ES Module
 echo "import('./dist/server/index.js');" > app.js
 
 print_yellow "\n[5/5] 正在唤醒系统底层守护引擎..."
 devil www restart "$DOMAIN"
 
-# ================= 检测域名并给出 IP 解析提示 =================
+# ================= 强制输出 IP 解析提示 =================
 print_green "\n========================================================"
 print_green "✅ 部署已完成！系统底层已接管进程。"
 print_green "========================================================"
 
-if [[ "$DOMAIN" == *".ct8.pl" || "$DOMAIN" == *".serv00.net" || "$DOMAIN" == *".bbe.pp.ua" ]]; then
-    print_purple "你使用的是系统自带域名，现在可以直接访问："
-    print_purple "👉 http://${DOMAIN}"
-else
-    SERVER_IP=$(devil vhost list | grep -w "$DOMAIN" | awk '{print $1}')
-    if [[ -z "$SERVER_IP" ]]; then
-        SERVER_IP=$(curl -s ifconfig.me)
-    fi
-    print_yellow "检测到你使用的是自定义域名，请确保你在 Cloudflare 配置了以下解析："
-    print_yellow "1. 添加一条 A 记录，名称填 ${purple}${DOMAIN}${yellow}，IP 填 ${green}${SERVER_IP}${yellow}"
-    print_purple "2. 务必将 Cloudflare 的 SSL/TLS 加密模式改为 ${yellow}灵活 (Flexible)${purple}"
-    print_purple "3. 待解析生效后访问：http://${DOMAIN}"
+# 无条件获取 IP 并显示
+SERVER_IP=$(devil vhost list | grep -w "$DOMAIN" | awk '{print $1}')
+if [[ -z "$SERVER_IP" ]]; then
+    SERVER_IP=$(curl -s ifconfig.me)
 fi
+
+print_yellow "请确保你在 Cloudflare 配置了以下解析："
+print_yellow "1. 添加一条 A 记录，名称填你的域名前缀，IP 填 ${green}${SERVER_IP}${yellow}"
+print_purple "2. 务必将 Cloudflare 的 SSL/TLS 加密模式改为 ${yellow}灵活 (Flexible)${purple}"
+print_purple "3. 待解析生效后访问：http://${DOMAIN}"
 echo ""

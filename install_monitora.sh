@@ -6,29 +6,44 @@ green="\e[1;32m"
 yellow="\e[1;33m"
 purple="\e[1;35m"
 
+print_red() { echo -e "${red}$1${re}"; }
 print_green() { echo -e "${green}$1${re}"; }
 print_yellow() { echo -e "${yellow}$1${re}"; }
-print_red() { echo -e "${red}$1${re}"; }
 print_purple() { echo -e "${purple}$1${re}"; }
 
-print_yellow "\n=== Monitora 专属一键原生部署脚本 ===\n"
+HOSTNAME=$(hostname)
+USERNAME=$(whoami | tr '[:upper:]' '[:lower:]')
 
-# 1. 交互式填写信息，绝不写死
-read -p "请输入你要绑定的域名 (如 monitor.yourdomain.com): " DOMAIN
-if [[ -z "$DOMAIN" ]]; then
-    print_red "域名不能为空！"
-    exit 1
+# 自动推断系统自带的默认域名
+if [[ "$HOSTNAME" =~ ct8 ]]; then
+    DEFAULT_DOMAIN="${USERNAME}.ct8.pl"
+elif [[ "$HOSTNAME" =~ hostuno ]]; then
+    DEFAULT_DOMAIN="${USERNAME}.useruno.com"
+else
+    DEFAULT_DOMAIN="${USERNAME}.serv00.net"
 fi
 
-# 使用 latest 动态路由，永远拉取最新版本！没有缓存！
-ZIP_URL="https://github.com/debbide/monitora/releases/latest/download/monitora-release.zip"
-WORKDIR="${HOME}/domains/${DOMAIN}/public_nodejs"
+print_yellow "\n=== Monitora 终极完美版一键部署脚本 (适用于 CT8/Serv00) ===\n"
 
-print_yellow "\n[1/5] 正在向系统申请原生 Node.js VIP 托管环境 (无需端口)..."
-devil www del "$DOMAIN" >/dev/null 2>&1
-devil www add "$DOMAIN" nodejs /usr/local/bin/node >/dev/null 2>&1
+# 1. 域名配置向导
+echo -e "${green}请输入你要绑定的自定义域名 (例如: monitor.你的域名.com)${re}"
+echo -e "${yellow}👉 如果不填直接回车，将使用系统自带域名: ${DEFAULT_DOMAIN}${re}"
+read -p "输入域名: " input_domain
+if [[ -z "$input_domain" ]]; then
+    CURRENT_DOMAIN="$DEFAULT_DOMAIN"
+else
+    CURRENT_DOMAIN="$input_domain"
+fi
+
+# 你的专属最新版动态下载链接
+ZIP_URL="https://github.com/debbide/monitora/releases/latest/download/monitora-release.zip"
+WORKDIR="${HOME}/domains/${CURRENT_DOMAIN}/public_nodejs"
+
+print_yellow "\n[1/5] 正在向系统底层申请 Node.js 网站环境..."
+devil www del "$CURRENT_DOMAIN" >/dev/null 2>&1
+devil www add "$CURRENT_DOMAIN" nodejs /usr/local/bin/node >/dev/null 2>&1
 if [ $? -ne 0 ]; then
-    print_red "❌ 原生 Node.js 环境配置失败！系统可能抽风，请稍后再试。"
+    print_red "❌ 申请环境失败！请稍后再试。"
     exit 1
 fi
 
@@ -36,7 +51,7 @@ print_yellow "\n[2/5] 正在下载 GitHub 最新编译好的成品包..."
 rm -rf "$WORKDIR" 2>/dev/null
 mkdir -p "$WORKDIR"
 cd "$WORKDIR" || exit 1
-# 使用 -L 自动跟随 latest 的重定向
+# 自动跟随最新版本的下载链接
 curl -sLo release.zip "$ZIP_URL"
 unzip -q release.zip && rm release.zip
 
@@ -47,22 +62,20 @@ print_yellow "\n[4/5] 正在配置系统级启动入口..."
 echo "import('./dist/server/index.js');" > app.js
 
 print_yellow "\n[5/5] 正在唤醒系统底层守护引擎..."
-devil www restart "$DOMAIN"
+devil www restart "$CURRENT_DOMAIN" >/dev/null 2>&1
 
-# ================= 强制输出真实 Web IP 解析提示 =================
-print_green "\n========================================================"
-print_green "✅ 部署已完成！系统底层已接管进程。"
-print_green "========================================================"
+print_green "\n============================================="
+print_green "🎉 恭喜！Monitora 监控面板已成功部署！"
+print_green "============================================="
 
-# 从 devil www list 官方列表中精准提取 Web 负载均衡 IP (第4列)
-SERVER_IP=$(devil www list | grep -w "$DOMAIN" | awk '{print $4}')
-
-if [[ -z "$SERVER_IP" ]]; then
-    print_red "⚠️ 警告：未能从系统中提取到 Web IP，请手动执行 devil www list 查看！"
-else
-    print_yellow "请确保你在 Cloudflare 配置了以下解析："
-    print_yellow "1. 添加一条 A 记录，名称填你的域名前缀，IP 填 ${green}${SERVER_IP}${yellow}"
+# 只有用户填了自定义域名时，才去查 IP 并弹出提示
+if [[ "$CURRENT_DOMAIN" != "$DEFAULT_DOMAIN" ]]; then
+    # 用最强逻辑：直接从官方 vhost 列表提取 Web 负载均衡 IP
+    ip_address=$(devil vhost list | awk '$2 ~ /web/ {print $1}' | head -n 1)
+    
+    print_purple "\n⚠️ 发现你使用了自定义域名！最后两步极其重要："
+    print_purple "1. 去 Cloudflare 添加 A 记录，名称填域名前缀，IP 指向: ${yellow}${ip_address}${purple}"
     print_purple "2. 务必将 Cloudflare 的 SSL/TLS 加密模式改为 ${yellow}灵活 (Flexible)${purple}"
-    print_purple "3. 待解析生效后访问：http://${DOMAIN}"
 fi
-echo ""
+
+echo -e "\n${green}📌 站点主页：${re}${purple}http://${CURRENT_DOMAIN}${re}\n"

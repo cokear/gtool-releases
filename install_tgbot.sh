@@ -52,9 +52,8 @@ mv */.* ./ 2>/dev/null
 rm -rf bot.zip
 
 print_yellow "\n[3/5] 正在创建 Python 虚拟环境并安装依赖..."
-PYTHON_BIN=$(command -v python3.11 || command -v python3.10 || command -v python3)
 if [ ! -d "venv" ]; then
-    $PYTHON_BIN -m venv venv
+    virtualenv venv || python3 -m venv venv
 fi
 source venv/bin/activate
 pip install -q --upgrade pip
@@ -75,7 +74,6 @@ print_green "\n============================================="
 print_green "🎉 恭喜！TGBOT-Python 已成功部署并在后台隐式运行！"
 print_green "============================================="
 
-# 自动探测并显示 IP 提示
 if ! echo "$DOMAIN" | grep -q '\(ct8\.pl\|serv00\.net\|useruno\.com\)'; then
     ip_address=$(devil vhost list | awk '$2 ~ /web/ {print $1}' | head -n 1)
     print_purple "\n⚠️ 发现你使用了自定义域名！最后两步极其重要："

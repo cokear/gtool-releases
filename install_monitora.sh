@@ -20,7 +20,7 @@ if [[ -z "$DOMAIN" ]]; then
     exit 1
 fi
 
-# 使用 latest/download 动态路由，永远拉取最新版本！绝对不会有缓存！
+# 使用 latest 动态路由，永远拉取最新版本！没有缓存！
 ZIP_URL="https://github.com/debbide/monitora/releases/latest/download/monitora-release.zip"
 WORKDIR="${HOME}/domains/${DOMAIN}/public_nodejs"
 
@@ -49,19 +49,20 @@ echo "import('./dist/server/index.js');" > app.js
 print_yellow "\n[5/5] 正在唤醒系统底层守护引擎..."
 devil www restart "$DOMAIN"
 
-# ================= 强制输出 IP 解析提示 =================
+# ================= 强制输出真实 Web IP 解析提示 =================
 print_green "\n========================================================"
 print_green "✅ 部署已完成！系统底层已接管进程。"
 print_green "========================================================"
 
-# 无条件获取 IP 并显示
-SERVER_IP=$(devil vhost list | grep -w "$DOMAIN" | awk '{print $1}')
-if [[ -z "$SERVER_IP" ]]; then
-    SERVER_IP=$(curl -s ifconfig.me)
-fi
+# 从 devil www list 官方列表中精准提取 Web 负载均衡 IP (第4列)
+SERVER_IP=$(devil www list | grep -w "$DOMAIN" | awk '{print $4}')
 
-print_yellow "请确保你在 Cloudflare 配置了以下解析："
-print_yellow "1. 添加一条 A 记录，名称填你的域名前缀，IP 填 ${green}${SERVER_IP}${yellow}"
-print_purple "2. 务必将 Cloudflare 的 SSL/TLS 加密模式改为 ${yellow}灵活 (Flexible)${purple}"
-print_purple "3. 待解析生效后访问：http://${DOMAIN}"
+if [[ -z "$SERVER_IP" ]]; then
+    print_red "⚠️ 警告：未能从系统中提取到 Web IP，请手动执行 devil www list 查看！"
+else
+    print_yellow "请确保你在 Cloudflare 配置了以下解析："
+    print_yellow "1. 添加一条 A 记录，名称填你的域名前缀，IP 填 ${green}${SERVER_IP}${yellow}"
+    print_purple "2. 务必将 Cloudflare 的 SSL/TLS 加密模式改为 ${yellow}灵活 (Flexible)${purple}"
+    print_purple "3. 待解析生效后访问：http://${DOMAIN}"
+fi
 echo ""

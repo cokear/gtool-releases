@@ -11,47 +11,30 @@ print_yellow() { echo -e "${yellow}$1${re}"; }
 print_red() { echo -e "${red}$1${re}"; }
 print_purple() { echo -e "${purple}$1${re}"; }
 
-print_yellow "\n=== TGBOT-Python 专属一键反代部署脚本 (适用于 CT8/Serv00) ===\n"
+print_yellow "\n=== Node.js 版 TGBOT 专属一键原生部署脚本 (适用于 CT8/Serv00) ===\n"
 
 # 1. 交互式填写信息
-read -p "请输入你想绑定的域名 (如 bot.ct8.pl 或自定义域名): " DOMAIN
+read -p "请输入你要绑定的域名 (如 bot.ct8.pl 或自定义域名): " DOMAIN
 if [[ -z "$DOMAIN" ]]; then
     print_red "域名不能为空！"
     exit 1
 fi
 
-ZIP_URL="https://github.com/cokear/gtool-releases/raw/refs/heads/main/py.zip"
-WORKDIR="${HOME}/domains/${DOMAIN}/public_python"
-mkdir -p "$WORKDIR"
+ZIP_URL="https://github.com/cokear/gtool-releases/raw/refs/heads/main/tgbot.zip"
+WORKDIR="${HOME}/domains/${DOMAIN}/public_nodejs"
 
-print_yellow "\n[1/5] 正在向系统申请内部端口与反向代理环境..."
+print_yellow "\n[1/4] 正在向系统申请原生 Node.js VIP 托管环境 (无需端口)..."
 devil www del "$DOMAIN" >/dev/null 2>&1
-
-# 修复检测逻辑，只精准提取真正的 4~5 位数字端口
-PORT=$(devil port list | awk '/tcp/ {print $1}' | head -n 1)
-if [ -z "$PORT" ]; then
-    PORT_OUTPUT=$(devil port add tcp random 2>&1)
-    # 核心修复：如果系统用波兰语说 OK，就再查一次列表拿真实端口
-    if [[ "$PORT_OUTPUT" == *"[Ok]"* ]]; then
-        PORT=$(devil port list | awk '/tcp/ {print $1}' | head -n 1)
-    fi
-    
-    if [ -z "$PORT" ]; then
-        print_red "❌ 端口申请失败！"
-        print_red "原因：你的账号 TCP 端口数量可能已达到上限（最多申请3个）。"
-        print_red "系统真实报错信息：$PORT_OUTPUT"
-        print_red "请登录 MyDevil 面板 -> Ports 菜单，删掉不用的 TCP 端口后再运行此脚本。"
-        exit 1
-    fi
+devil www add "$DOMAIN" nodejs /usr/local/bin/node >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+    print_red "❌ 原生 Node.js 环境配置失败！系统可能抽风，请稍后再试。"
+    exit 1
 fi
-print_green " -> 成功获取专属内部端口: $PORT"
 
-devil www add "$DOMAIN" proxy localhost "$PORT" >/dev/null 2>&1
-
-print_yellow "\n[2/5] 正在拉取代码并清理环境..."
+print_yellow "\n[2/4] 正在拉取 Node.js 代码并重构架构..."
+rm -rf "$WORKDIR"/* "$WORKDIR"/.[!.]* 2>/dev/null
+mkdir -p "$WORKDIR"
 cd "$WORKDIR" || exit
-# 清空当前目录，保留 data
-find . -mindepth 1 -maxdepth 1 ! -name 'data' -exec rm -rf {} +
 
 curl -sLo bot.zip "$ZIP_URL"
 unzip -oq bot.zip
@@ -59,35 +42,21 @@ mv */* ./ 2>/dev/null
 mv */.* ./ 2>/dev/null
 rm -rf bot.zip
 
-# 核心防坑：强制清理可能从 Windows 压缩包带过来的残废虚拟环境
-rm -rf venv
-
-print_yellow "\n[3/5] 正在创建 Linux 专属 Python 虚拟环境并安装依赖..."
-# 兜底式连环创建，保证万无一失
-virtualenv venv || python3 -m venv venv || python -m venv venv
-
-if [ ! -f "venv/bin/activate" ]; then
-    print_red "❌ 虚拟环境创建彻底失败！请截图联系我排查。"
-    exit 1
+# 强制将入口文件改为 app.js，迎合 Passenger 底层唤醒规则
+if [ -f "index.js" ]; then
+    mv index.js app.js
 fi
+# 兼容 Mac/Linux 不同的 sed 语法，修改 package.json 里的 main
+sed -i '' 's/"main": "index.js"/"main": "app.js"/g' package.json 2>/dev/null || sed -i 's/"main": "index.js"/"main": "app.js"/g' package.json 2>/dev/null
 
-source venv/bin/activate
-pip install -q --upgrade pip
-pip install -q -r requirements.txt
+print_yellow "\n[3/4] 正在极速安装 Node.js 依赖模块 (告别编译地狱)..."
+npm install --production
 
-print_yellow "\n[4/5] 正在配置 PM2 进程守护神..."
-if ! command -v pm2 &>/dev/null; then
-    npm install -g pm2 >/dev/null 2>&1
-    export PATH=~/.npm-global/bin:$PATH
-fi
-pm2 delete "tgbot-$DOMAIN" >/dev/null 2>&1
-
-print_yellow "\n[5/5] 正在唤醒机器人守护进程..."
-PORT=$PORT pm2 start main.py --interpreter ./venv/bin/python --name "tgbot-$DOMAIN" >/dev/null 2>&1
-pm2 save >/dev/null 2>&1
+print_yellow "\n[4/4] 正在唤醒 Passenger 进程守护神..."
+devil www restart "$DOMAIN" >/dev/null 2>&1
 
 print_green "\n============================================="
-print_green "🎉 恭喜！TGBOT-Python 已成功部署并在后台隐式运行！"
+print_green "🎉 恭喜！Node.js 版 TGBOT 已成功获得系统 VIP 级原生托管！"
 print_green "============================================="
 
 if ! echo "$DOMAIN" | grep -q '\(ct8\.pl\|serv00\.net\|useruno\.com\)'; then

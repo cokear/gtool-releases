@@ -27,15 +27,17 @@ mkdir -p "$WORKDIR"
 print_yellow "\n[1/5] 正在向系统申请内部端口与反向代理环境..."
 devil www del "$DOMAIN" >/dev/null 2>&1
 
-PORT=$(devil port list | grep tcp | awk 'NR==1 {print $1}')
+# 修复检测逻辑，只精准提取真正的 4~5 位数字端口
+PORT=$(devil port list | awk '/tcp/ {print $1}' | head -n 1)
 if [ -z "$PORT" ]; then
     PORT_OUTPUT=$(devil port add tcp)
-    PORT=$(echo "$PORT_OUTPUT" | grep -oE "[0-9]+")
-fi
-
-if [ -z "$PORT" ]; then
-    print_red "端口申请失败，可能已达到系统上限！请登录面板检查。"
-    exit 1
+    PORT=$(echo "$PORT_OUTPUT" | grep -oE "[0-9]{4,5}" | head -n 1)
+    if [ -z "$PORT" ]; then
+        print_red "❌ 端口申请失败！"
+        print_red "原因：你的账号 TCP 端口数量可能已达到上限（最多申请3个）。"
+        print_red "请登录 MyDevil 面板 -> Ports 菜单，删掉不用的 TCP 端口后再运行此脚本。"
+        exit 1
+    fi
 fi
 print_green " -> 成功获取专属内部端口: $PORT"
 
@@ -43,7 +45,8 @@ devil www add "$DOMAIN" proxy localhost "$PORT" >/dev/null 2>&1
 
 print_yellow "\n[2/5] 正在拉取代码并清理环境..."
 cd "$WORKDIR" || exit
-find . -mindepth 1 -maxdepth 1 ! -name 'data' ! -name 'venv' -exec rm -rf {} +
+# 清空当前目录，保留 data
+find . -mindepth 1 -maxdepth 1 ! -name 'data' -exec rm -rf {} +
 
 curl -sLo bot.zip "$ZIP_URL"
 unzip -oq bot.zip
@@ -51,10 +54,18 @@ mv */* ./ 2>/dev/null
 mv */.* ./ 2>/dev/null
 rm -rf bot.zip
 
-print_yellow "\n[3/5] 正在创建 Python 虚拟环境并安装依赖..."
-if [ ! -d "venv" ]; then
-    virtualenv venv || python3 -m venv venv
+# 核心防坑：强制清理可能从 Windows 压缩包带过来的残废虚拟环境
+rm -rf venv
+
+print_yellow "\n[3/5] 正在创建 Linux 专属 Python 虚拟环境并安装依赖..."
+# 兜底式连环创建，保证万无一失
+virtualenv venv || python3 -m venv venv || python -m venv venv
+
+if [ ! -f "venv/bin/activate" ]; then
+    print_red "❌ 虚拟环境创建彻底失败！请截图联系我排查。"
+    exit 1
 fi
+
 source venv/bin/activate
 pip install -q --upgrade pip
 pip install -q -r requirements.txt

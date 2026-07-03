@@ -103,8 +103,11 @@ EOF
 
     print_yellow "\n[5/5] 正在打补丁适配 CT8 环境，并唤醒站点..."
     
-    # 核心补丁：抹除代码里写死的 0.0.0.0 IP绑定，放权给系统管家
+    # 核心补丁1：抹除代码里写死的 0.0.0.0 IP绑定，放权给系统管家
     node -e "const fs = require('fs'); let c = fs.readFileSync('server/index.js', 'utf8'); c = c.replace(/,\s*['\"](0\.0\.0\.0|127\.0\.0\.1)['\"]/g, ''); fs.writeFileSync('server/index.js', c);"
+    
+    # 核心补丁2：强拆原作者的“装死”逻辑，让 Passenger 管家一叫就醒
+    node -e "const fs = require('fs'); let c = fs.readFileSync('server/index.js', 'utf8'); c = c.replace(/if\s*\(require\.main\s*===\s*module\)\s*\{[\s\S]*?\}/, 'startServer();'); fs.writeFileSync('server/index.js', c);"
     
     # 欺骗 CT8 的守护进程，让它以为 app.js 是入口
     ln -sf server/index.js app.js
@@ -114,7 +117,7 @@ EOF
 
 show_info(){
     print_green "\n============================================="
-    print_green "🎉 恭喜！导航站已成功部署并在后台隐式运行！"
+    print_green "🎉 恭喜！导航站已成功部署并在后台完美运行！"
     print_green "============================================="
     
     if [[ "$CURRENT_DOMAIN" != "$DEFAULT_DOMAIN" ]]; then

@@ -31,22 +31,35 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-print_yellow "\n[2/4] 正在拉取 Node.js 代码并重构架构..."
+print_yellow "\n[2/4] 正在拉取 Node.js 代码并进行智能结构重组..."
 rm -rf "$WORKDIR"/* "$WORKDIR"/.[!.]* 2>/dev/null
 mkdir -p "$WORKDIR"
 cd "$WORKDIR" || exit
 
 curl -sLo bot.zip "$ZIP_URL"
-unzip -oq bot.zip
-mv */* ./ 2>/dev/null
-mv */.* ./ 2>/dev/null
-rm -rf bot.zip
+
+# 智能解压算法：自动识别“散装打包”与“文件夹打包”
+mkdir -p temp_unzip
+unzip -oq bot.zip -d temp_unzip
+DIR_COUNT=$(find temp_unzip -mindepth 1 -maxdepth 1 -type d | wc -l)
+FILE_COUNT=$(find temp_unzip -mindepth 1 -maxdepth 1 -type f | wc -l)
+
+if [ "$DIR_COUNT" -eq 1 ] && [ "$FILE_COUNT" -eq 0 ]; then
+    # 说明打包的是整个外层文件夹
+    TOP_DIR=$(find temp_unzip -mindepth 1 -maxdepth 1 -type d)
+    mv "$TOP_DIR"/* ./ 2>/dev/null
+    mv "$TOP_DIR"/.[!.]* ./ 2>/dev/null
+else
+    # 说明是全选文件散装打包的
+    mv temp_unzip/* ./ 2>/dev/null
+    mv temp_unzip/.[!.]* ./ 2>/dev/null
+fi
+rm -rf temp_unzip bot.zip
 
 # 强制将入口文件改为 app.js，迎合 Passenger 底层唤醒规则
 if [ -f "index.js" ]; then
     mv index.js app.js
 fi
-# 兼容 Mac/Linux 不同的 sed 语法，修改 package.json 里的 main
 sed -i '' 's/"main": "index.js"/"main": "app.js"/g' package.json 2>/dev/null || sed -i 's/"main": "index.js"/"main": "app.js"/g' package.json 2>/dev/null
 
 print_yellow "\n[3/4] 正在极速安装 Node.js 依赖模块 (告别编译地狱)..."
@@ -66,4 +79,5 @@ if ! echo "$DOMAIN" | grep -q '\(ct8\.pl\|serv00\.net\|useruno\.com\)'; then
     print_purple "2. 务必将 Cloudflare 的 SSL/TLS 加密模式改为 ${yellow}灵活 (Flexible)${purple}"
 fi
 
-print_green "\n📌 机器人管理面板：http://${DOMAIN}"
+print_green "\n📌 机器人前端主页：http://${DOMAIN}"
+print_green "📌 机器人管理面板：http://${DOMAIN}/admin"

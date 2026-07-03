@@ -102,7 +102,7 @@ ADMIN_PASSWORD=${ADMIN_PASSWORD}
 TZ=Asia/Shanghai
 EOF
 
-    print_yellow "\n[4/5] 正在安装底层依赖模块，大概需要 1 分钟，请喝口茶..."
+    print_yellow "\n[4/5] 正在安装底层依赖模块，大概需要 1 分钟，请耐心等待..."
     npm install --silent > /dev/null 2>&1
 
     print_yellow "\n[5/5] 桥接启动入口，并唤醒站点..."
@@ -134,6 +134,15 @@ show_info(){
     echo -e "${green}🔑 管理密码：${re}${purple}${ADMIN_PASSWORD}${re}\n"
     
     print_yellow "提示: 刚修改完 A 记录或者刚拉起站点，通常需要 1 分钟左右才能打开网页，稍安勿躁~"
+}
+
+# ================================
+# 定义总流程并执行
+# ================================
+install_nav() {
+    check_website
+    apply_configure
+    show_info
 }
 
 # 鸣枪起跑

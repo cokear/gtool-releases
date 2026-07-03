@@ -6,7 +6,6 @@ green="\e[1;32m"
 yellow="\e[1;33m"
 purple="\e[1;35m"
 
-# 彩色输出小工具
 print_red() { echo -e "${red}$1${re}"; }
 print_green() { echo -e "${green}$1${re}"; }
 print_yellow() { echo -e "${yellow}$1${re}"; }
@@ -24,7 +23,7 @@ else
     DEFAULT_DOMAIN="${USERNAME}.serv00.net"
 fi
 
-print_yellow "\n=== nav-dashboard 一键部署脚本 (适用于 CT8/Serv00) ===\n"
+print_yellow "\n=== nav-dashboard 终极完美版一键脚本 (适用于 CT8/Serv00) ===\n"
 
 # 1. 域名配置向导
 if [[ -z "$DOMAIN" ]]; then
@@ -55,7 +54,7 @@ check_website() {
     
     CURRENT_SITE=$(devil www list | awk -v domain="$CURRENT_DOMAIN" '$1 == domain && $2 == "nodejs"')
     if [ -n "$CURRENT_SITE" ]; then
-        print_green "站点 ${CURRENT_DOMAIN} 已存在 Node.js 环境，跳过创建。"
+        print_green "站点 ${CURRENT_DOMAIN} 已存在 Node.js 环境。"
     else
         EXIST_SITE=$(devil www list | awk -v domain="$CURRENT_DOMAIN" '$1 == domain')
         if [ -n "$EXIST_SITE" ]; then
@@ -74,29 +73,26 @@ apply_configure() {
     mkdir -p ~/.npm-global > /dev/null 2>&1
     npm config set prefix '~/.npm-global' > /dev/null 2>&1
     
-    # 临时生效当前终端
     export PATH=~/.npm-global/bin:~/bin:$PATH
-    # 写入环境变量文件防丢失
     if ! grep -q "npm-global/bin" "$HOME/.bash_profile" 2>/dev/null; then
         echo 'export PATH=~/.npm-global/bin:~/bin:$PATH' >> $HOME/.bash_profile
     fi
 
-    print_yellow "\n[3/5] 正在拉取 nav-dashboard 核心源码..."
+    print_yellow "\n[3/5] 正在拉取 nav-dashboard 完整源码(含前后端)..."
     rm -rf "${WORKDIR:?}"/* > /dev/null 2>&1
     rm -rf "${WORKDIR:?}"/.* > /dev/null 2>&1
-    cd "${WORKDIR}"
+    cd "${WORKDIR}" || exit
     
-    # 极速下载压缩包
     $COMMAND nav-dashboard.zip https://github.com/debbide/nav-dashboard/archive/refs/heads/main.zip
     unzip -oq nav-dashboard.zip > /dev/null 2>&1
     rm -f nav-dashboard.zip
     
-    # 剥离 Docker 外壳，提取纯净版 Node.js 后端代码
+    # 核心：同时提取 docker 后端 和 public 前端
     mv nav-dashboard-main/docker/* ./ > /dev/null 2>&1
     mv nav-dashboard-main/docker/.* ./ 2>/dev/null
+    mv nav-dashboard-main/public ./ > /dev/null 2>&1
     rm -rf nav-dashboard-main
     
-    # 注入用户密码和时区配置
     cat > .env <<EOF
 ADMIN_PASSWORD=${ADMIN_PASSWORD}
 TZ=Asia/Shanghai
@@ -105,11 +101,14 @@ EOF
     print_yellow "\n[4/5] 正在安装底层依赖模块，大概需要 1 分钟，请耐心等待..."
     npm install --silent > /dev/null 2>&1
 
-    print_yellow "\n[5/5] 桥接启动入口，并唤醒站点..."
+    print_yellow "\n[5/5] 正在打补丁适配 CT8 环境，并唤醒站点..."
+    
+    # 核心补丁：抹除代码里写死的 0.0.0.0 IP绑定，放权给系统管家
+    node -e "const fs = require('fs'); let c = fs.readFileSync('server/index.js', 'utf8'); c = c.replace(/,\s*['\"](0\.0\.0\.0|127\.0\.0\.1)['\"]/g, ''); fs.writeFileSync('server/index.js', c);"
+    
     # 欺骗 CT8 的守护进程，让它以为 app.js 是入口
     ln -sf server/index.js app.js
     
-    # 重启站点，让代码被 Passenger 进程管理器加载
     devil www restart ${CURRENT_DOMAIN} > /dev/null 2>&1
 }
 
@@ -118,22 +117,16 @@ show_info(){
     print_green "🎉 恭喜！导航站已成功部署并在后台隐式运行！"
     print_green "============================================="
     
-    # 如果用户用了自定义域名，动态查询 IP 并给出 CF 教程
     if [[ "$CURRENT_DOMAIN" != "$DEFAULT_DOMAIN" ]]; then
         ip_address=$(devil vhost list | awk '$2 ~ /web/ {print $1}')
-        print_purple "\n⚠️ 发现你使用了自定义域名！最后一步操作："
-        print_purple "请前往你的域名解析商 (强烈推荐 Cloudflare)："
-        print_purple "添加一条 A 记录："
-        print_purple "名字: 你的域名前缀"
-        print_purple "IP指向: ${yellow}${ip_address}${purple}"
-        print_purple "(记得把 Cloudflare 的代理状态【小黄云】点亮，即可秒升 HTTPS)"
+        print_purple "\n⚠️ 发现你使用了自定义域名！最后两步极其重要："
+        print_purple "1. 去 Cloudflare 添加 A 记录，指向: ${yellow}${ip_address}${purple}"
+        print_purple "2. 务必将 Cloudflare 的 SSL/TLS 加密模式改为 ${yellow}灵活 (Flexible)${purple}"
     fi
 
     echo -e "\n${green}📌 站点主页：${re}${purple}http://${CURRENT_DOMAIN}${re}"
     echo -e "${green}⚙️  管理后台：${re}${purple}http://${CURRENT_DOMAIN}/admin.html${re}"
     echo -e "${green}🔑 管理密码：${re}${purple}${ADMIN_PASSWORD}${re}\n"
-    
-    print_yellow "提示: 刚修改完 A 记录或者刚拉起站点，通常需要 1 分钟左右才能打开网页，稍安勿躁~"
 }
 
 # ================================

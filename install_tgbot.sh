@@ -30,11 +30,13 @@ devil www del "$DOMAIN" >/dev/null 2>&1
 # 修复检测逻辑，只精准提取真正的 4~5 位数字端口
 PORT=$(devil port list | awk '/tcp/ {print $1}' | head -n 1)
 if [ -z "$PORT" ]; then
-    PORT_OUTPUT=$(devil port add tcp)
+    # 加上了 random 参数，让系统随机分配
+    PORT_OUTPUT=$(devil port add tcp random 2>&1)
     PORT=$(echo "$PORT_OUTPUT" | grep -oE "[0-9]{4,5}" | head -n 1)
     if [ -z "$PORT" ]; then
         print_red "❌ 端口申请失败！"
         print_red "原因：你的账号 TCP 端口数量可能已达到上限（最多申请3个）。"
+        print_red "系统真实报错信息：$PORT_OUTPUT"
         print_red "请登录 MyDevil 面板 -> Ports 菜单，删掉不用的 TCP 端口后再运行此脚本。"
         exit 1
     fi

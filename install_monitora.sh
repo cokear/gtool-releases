@@ -11,7 +11,7 @@ print_green() { echo -e "${green}$1${re}"; }
 print_yellow() { echo -e "${yellow}$1${re}"; }
 print_purple() { echo -e "${purple}$1${re}"; }
 
-print_yellow "\n=== Monitora 一键极速部署脚本 ===\n"
+print_yellow "\n=== Monitora 一键无损部署/升级脚本 ===\n"
 
 # 1. 直接输入域名
 read -p "请输入你要绑定的域名: " DOMAIN
@@ -23,28 +23,40 @@ fi
 ZIP_URL="https://github.com/debbide/monitora/releases/latest/download/monitora-release.zip"
 WORKDIR="${HOME}/domains/${DOMAIN}/public_nodejs"
 
-print_yellow "\n[1/5] 正在配置 Node.js 环境..."
+print_yellow "\n[1/6] 正在配置 Node.js 环境..."
 devil www del "$DOMAIN" >/dev/null 2>&1
 devil www add "$DOMAIN" nodejs /usr/local/bin/node >/dev/null 2>&1
 
-print_yellow "\n[2/5] 正在下载 GitHub 最新成品包..."
+print_yellow "\n[2/6] 正在备份历史监控数据 (如果是首次安装则跳过)..."
+if [ -d "$WORKDIR/dist/data" ]; then
+    print_green "发现历史数据，正在备份..."
+    cp -r "$WORKDIR/dist/data" /tmp/monitora_data_backup
+fi
+
+print_yellow "\n[3/6] 正在下载 GitHub 最新成品包..."
 rm -rf "$WORKDIR" 2>/dev/null
 mkdir -p "$WORKDIR"
 cd "$WORKDIR" || exit 1
 curl -sLo release.zip "$ZIP_URL"
 unzip -q release.zip && rm release.zip
 
-print_yellow "\n[3/5] 正在安装生产环境依赖..."
+print_yellow "\n[4/6] 正在恢复历史监控数据..."
+if [ -d "/tmp/monitora_data_backup" ]; then
+    mkdir -p "$WORKDIR/dist/data"
+    cp -r /tmp/monitora_data_backup/* "$WORKDIR/dist/data/" 2>/dev/null
+    rm -rf /tmp/monitora_data_backup
+    print_green "数据恢复成功！"
+fi
+
+print_yellow "\n[5/6] 正在安装生产环境依赖..."
 npm ci --production --loglevel error
 
-print_yellow "\n[4/5] 正在配置启动入口..."
+print_yellow "\n[6/6] 正在配置启动入口并重启站点..."
 echo "import('./dist/server/index.js');" > app.js
-
-print_yellow "\n[5/5] 正在重启站点..."
 devil www restart "$DOMAIN" >/dev/null 2>&1
 
 print_green "\n============================================="
-print_green "✅ 部署已完成！"
+print_green "✅ 部署/升级已无损完成！"
 print_green "============================================="
 
 # 直接提取正确的负载均衡 IP

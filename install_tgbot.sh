@@ -30,9 +30,12 @@ devil www del "$DOMAIN" >/dev/null 2>&1
 # 修复检测逻辑，只精准提取真正的 4~5 位数字端口
 PORT=$(devil port list | awk '/tcp/ {print $1}' | head -n 1)
 if [ -z "$PORT" ]; then
-    # 加上了 random 参数，让系统随机分配
     PORT_OUTPUT=$(devil port add tcp random 2>&1)
-    PORT=$(echo "$PORT_OUTPUT" | grep -oE "[0-9]{4,5}" | head -n 1)
+    # 核心修复：如果系统用波兰语说 OK，就再查一次列表拿真实端口
+    if [[ "$PORT_OUTPUT" == *"[Ok]"* ]]; then
+        PORT=$(devil port list | awk '/tcp/ {print $1}' | head -n 1)
+    fi
+    
     if [ -z "$PORT" ]; then
         print_red "❌ 端口申请失败！"
         print_red "原因：你的账号 TCP 端口数量可能已达到上限（最多申请3个）。"

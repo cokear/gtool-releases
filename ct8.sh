@@ -40,7 +40,7 @@ else
 fi
 
 # 2. 密码配置向导
-echo -e "\n${green}请设置导航站的管理后台密码 (如果不填直接回车，默认为 123456)${re}"
+echo -e "\n${green}请设置导航站的管理后台密码 (如果不填直接回车，默认为 admin123)${re}"
 read -p "输入密码: " input_password
 ADMIN_PASSWORD=${input_password:-123456}
 

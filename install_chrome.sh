@@ -1,4 +1,4 @@
-cat << 'EOF' > /root/install_all.sh && bash /root/install_all.sh
+cat << 'EOF' > /root/install_chrome.sh && bash /root/install_chrome.sh
 #!/bin/bash
 set -e
 
